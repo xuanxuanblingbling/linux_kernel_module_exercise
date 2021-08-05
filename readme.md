@@ -1,11 +1,7 @@
----
-title: linux 内核 初探：运行你代码在内核态
-categories:
-- CTF/Pwn
-tags: 
----
+# linux 内核 初探：运行你代码在内核态
 
-> 正向开发是理解一个复杂系统的必要过程，我们熟悉linux用户态的Pwn题，是因为随手就能写出一个helloworld，然后编译、运行、逆向、调试一条龙，进而理解它完整的生命周期。linux内核Pwn的文章有很多，不过大都是以完成一道题目的视角行文的。而本文希望，我们能熟悉内核态的代码的运行状态，具体来说就是：在ubuntu20.04的本机环境下完成 ① 正向开发：将我们的代码送进内核态运行，了解有哪些可以使用的内核函数，基于这些函数我们实现一些功能。② 内存调试：使用log大法对内核态进行调试并分析内存布局。③ 内核本体：找到内核二进制代码本体，认识一下。
+
+> 正向开发是理解一个复杂系统的必要过程，我们熟悉linux用户态的Pwn题，是因为随手就能写出一个helloworld，然后编译、运行、逆向、调试一条龙，进而理解它完整的生命周期。linux内核Pwn的文章有很多，不过大都是以完成一道题目的视角行文的。而本文希望，我们能熟悉内核态的代码的运行状态，具体来说就是：在ubuntu20.04(linux 5.11.0-25)的本机环境下完成 ① 正向开发：将我们的代码送进内核态运行，了解有哪些可以使用的内核函数，基于这些函数我们实现一些功能。② 内存调试：使用log大法对内核态进行调试并分析内存布局。③ 内核本体：找到内核二进制代码本体，认识一下。
 
 ## 攻击概述
 
@@ -38,9 +34,7 @@ tags:
 
 ### 基础知识
 
-- [https://www.kernel.org/](https://www.kernel.org/)
-- [https://www.kernel.org/doc/html/latest/](https://www.kernel.org/doc/html/latest/)
-
+首先发现了写的挺好的一个系列：
 
 - [linux模块编程（一）—— 加载你的模块](https://blog.csdn.net/qb_2008/article/details/6835677)
 - [linux模块编程（二）—— 运行不息的内核线程kthread](https://blog.csdn.net/qb_2008/article/details/6835783)
@@ -48,13 +42,27 @@ tags:
 - [linux模块编程（四）—— 消息的使者list](https://blog.csdn.net/qb_2008/article/details/6839899)
 - [linux内核的学习方法](https://blog.csdn.net/qb_2008/article/details/6832361)
 
+
+正向开发必然要回答一个问题：我可以使用哪些函数？
+
+- [https://www.kernel.org/](https://www.kernel.org/)
+- [https://www.kernel.org/doc/html/latest/](https://www.kernel.org/doc/html/latest/)
+
+
+
+
 ### helloworld
 
+自然免不了俗，首先是最简单的，随处可见的helloworld
 
-```
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ ls
+- [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/01.hello/hello.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/01.hello/hello.c)
+
+编译，安装模块，查看dmesg，成功打印helloworld：
+
+```c
+$ ls
 hello.c  Makefile
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ make
+$ make
 make -C /lib/modules/5.8.0-63-generic/build M=/mnt/hgfs/桌面/kernel/hello modules
 make[1]: Entering directory '/usr/src/linux-headers-5.8.0-63-generic'
   CC [M]  /mnt/hgfs/桌面/kernel/hello/hello.o
@@ -62,16 +70,83 @@ make[1]: Entering directory '/usr/src/linux-headers-5.8.0-63-generic'
   CC [M]  /mnt/hgfs/桌面/kernel/hello/hello.mod.o
   LD [M]  /mnt/hgfs/桌面/kernel/hello/hello.ko
 make[1]: Leaving directory '/usr/src/linux-headers-5.8.0-63-generic'
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ sudo insmod hello.ko 
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ dmesg | tail -n 1
+$ sudo insmod hello.ko 
+$ dmesg | tail -n 1
 [ 2009.281102] Hello, world!
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ sudo rmmod hello
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/hello$ dmesg | tail -n 2
+$ sudo rmmod hello
+$ dmesg | tail -n 2
 [ 2009.281102] Hello, world!
 [ 2021.107657] Hello, exit!
 ```
 
+以上我们的printk打印代码，成功的运行在了内核态，不过这个代码只在模块安装时触发运行。
+
 ### watchdog
+
+之前在调试一个基于海思hi3518解决方案的摄像头时，只要gdb把目标进程挂上，系统不一会就重启了，开始以为是有其他进程检测反调试，不过我把其他看起来有关的进程全部干掉后，仍然没用。后来发现了一个`[hidog]`内核线程，看起来就是看门狗功能，经过对目标程序的逆向，发现的确有个线程在不断的ioctl一个dev目录下的watchdog设备文件。最开始想的验证以上推测正确与否的思路是字节写一个不断ioctl的代码交叉编译上去，不过因为内核版本和交叉编译工具不太合适，一度陷入放弃。但最后猛然找到了对应的内核模块文件`wdt.ko`，由于此系统的文件系统可以修改，并且发现此模块是开机后才安装的，所以直接把`wdk.ko`删掉了，重启后挂gdb则不会重启，可以正常调试了。
+
+- [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
+- [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
+
+所以`wdt.ko`运行起来的内核线程[hidog]就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复现了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。
+
+- [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c)
+
+
+编译，安装，即可看到有了`[hidog]`内核线程：
+
+```c
+$ make
+make -C /lib/modules/5.11.0-25-generic/build M=/home/xuanxuan/linux_kernel_module_exercise/02.hidog modules
+make[1]: Entering directory '/usr/src/linux-headers-5.11.0-25-generic'
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/02.hidog/hidog.o
+  MODPOST /home/xuanxuan/linux_kernel_module_exercise/02.hidog/Module.symvers
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/02.hidog/hidog.mod.o
+  LD [M]  /home/xuanxuan/linux_kernel_module_exercise/02.hidog/hidog.ko
+make[1]: Leaving directory '/usr/src/linux-headers-5.11.0-25-generic'
+$ sudo insmod ./hidog.ko 
+[sudo] password for xuanxuan: 
+$ ps -ef | grep hidog
+root       24750       2  0 15:21 ?        00:00:00 [hidog]
+xuanxuan   24866    2337  0 15:22 pts/0    00:00:00 grep --color=auto hidog
+
+```
+
+然后使用dmesg即可看到令人紧张的计时，如果不做任何操作，你的电脑将在30s后重启：
+
+```c
+$ watch -n 1 "dmesg | tail -n 5"
+Every 1.0s: dmesg | tail -n 5       ubuntu: Thu Aug  5 15:31:42 2021
+
+[  419.164103] hidog clock: 1
+[  420.188266] hidog clock: 2
+[  421.212630] hidog clock: 3
+[  422.235847] hidog clock: 4
+[  423.260249] hidog clock: 5
+```
+
+此时如果cat一下`/proc/hidog`文件，计时则会退回到0，并重新开始自增，可以循环cat，即喂狗：
+
+
+```c
+$ while true; do cat /proc/hidog || sleep 1; done
+```
+
+
+所以我们的watch窗口也可以观察到clock变量，令人放心的1，电脑不会重启：
+
+```c
+Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
+
+[  605.861439] hidog clock: 1
+[  606.885639] hidog clock: 1
+[  607.908981] hidog clock: 1
+[  608.933025] hidog clock: 1
+[  609.957441] hidog clock: 1
+```
+
+所以当喂狗的进程或者线程失效后，clock继续自增，系统重启。
+
 
 ### 文件读写
 
