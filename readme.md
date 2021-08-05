@@ -51,11 +51,34 @@
 
 
 
+以下代码只求最简以完成功能，目的是为了说明例子、看的清楚，所以什么线程安全，锁啥的，统统不予考虑。
+
 ### helloworld
 
-自然免不了俗，首先是最简单的，随处可见的helloworld
+自然免不了俗，首先是最简单的，随处可见的helloworld：
 
 - [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/01.hello/hello.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/01.hello/hello.c)
+
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+ 
+MODULE_LICENSE("GPL");
+ 
+static int hello_init(void)
+{
+    printk(KERN_INFO "Hello, world!\n");
+    return 0;
+}
+ 
+static void hello_exit(void)
+{
+    printk(KERN_INFO "Hello, exit!\n");
+}
+ 
+module_init(hello_init);
+module_exit(hello_exit);
+```
 
 编译，安装模块，查看dmesg，成功打印helloworld：
 
@@ -88,10 +111,61 @@ $ dmesg | tail -n 2
 - [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
 - [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
 
-所以`wdt.ko`运行起来的内核线程[hidog]就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复现了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。
+所以`wdt.ko`运行起来的内核线程`[hidog]`就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复现了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API：[Linux Kernel module to reboot the system using emergency_restart API](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)。
 
 - [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c)
 
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/reboot.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
+#include <linux/proc_fs.h>
+
+MODULE_LICENSE("GPL");
+
+struct task_struct * result;
+int clock;
+
+int dog(void * argc)
+{   
+    while(!kthread_should_stop()){
+        ssleep(1);
+        printk(KERN_INFO "hidog clock: %d\n",++clock);
+        if(clock>30) emergency_restart();
+    }
+    return 0;
+}
+
+int hidog_open(struct inode *inode, struct file *file){
+    clock = 0;
+    return 0;
+}
+
+const struct proc_ops myops = {
+    .proc_open = hidog_open
+};
+
+static int hidog_init(void)
+{
+    printk(KERN_INFO "hidog, init!\n");
+    result = kthread_create_on_node(dog, NULL, -1, "hidog");
+    wake_up_process(result);
+    proc_create("hidog",0666,NULL,&myops);
+    return 0;
+}
+ 
+static void hidog_exit(void)
+{
+    kthread_stop(result);
+    remove_proc_entry("hidog", NULL);
+    printk(KERN_INFO "hidog, exit!\n");
+}
+ 
+module_init(hidog_init);
+module_exit(hidog_exit);
+```
 
 编译，安装，即可看到有了`[hidog]`内核线程：
 
@@ -150,8 +224,46 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 
 ### 文件读写
 
-- [Linux 内核态文件操作](https://blog.csdn.net/cenziboy/article/details/7867489)
+网上找到许多例子：
 
+- [Linux 内核态文件操作](https://blog.csdn.net/cenziboy/article/details/7867489)
+- [Linux内核下读写文件](https://www.cnblogs.com/chorm590/p/12565991.html)
+- [linux内核编程-内核态文件操作](https://blog.csdn.net/ggmjxry/article/details/79780766)
+
+
+- [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
+
+
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+ 
+MODULE_LICENSE("GPL");
+static char buf[100];
+ 
+mm_segment_t old_fs;
+static int readfile_init(void)
+{
+    struct file *fp;
+    loff_t pos = 0;
+
+    printk("readfile enter\n");
+    fp  = filp_open("/flag", O_RDWR ,0);
+    kernel_read(fp, buf, sizeof(buf), &pos);
+    printk("read: %s\n", buf);
+    filp_close(fp, NULL);
+    return 0;
+}
+ 
+static void readfile_exit(void)
+{
+    printk(KERN_INFO "readfile, exit!\n");
+}
+ 
+module_init(readfile_init);
+module_exit(readfile_exit);
+```
 
 
 ## 内存调试
@@ -166,6 +278,70 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 
 
 ### 自己构建
+
+
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/proc_fs.h>
+
+MODULE_LICENSE("GPL");
+
+char * addr;
+int length;
+
+static ssize_t kmem_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
+{
+    char buf[0x1000];
+    copy_from_user(buf, ubuf, count);
+    sscanf(buf,"%llx %x",&addr,&length);
+    printk("addr: %llx, length: %x\n",addr,length);
+    return count;
+}
+
+static ssize_t kmem_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
+{
+    printk(KERN_INFO "kmem, read!\n");
+    if(*ppos > 0) return 0;
+    char buf[0x1000];
+    
+    int len = sprintf(buf,"addr: 0x%llx length: 0x%x\n",addr,length);
+    int i=0;
+    for(i;i<length;i++){
+        if((i%8==0)  && (i!=0)) len += sprintf(buf+len,"  ");
+        if((i%16==0) && (i!=0)) len += sprintf(buf+len,"\n");
+        len += sprintf(buf+len,"%02X ",addr[i] & 0xff);
+    }
+    len += sprintf(buf+len,"\n");
+    
+    copy_to_user(ubuf,buf,len);
+    *ppos = len;
+    return len;
+}
+
+const struct proc_ops myops = {
+    .proc_write = kmem_write,
+    .proc_read  = kmem_read
+};
+
+static int kmem_init(void)
+{
+    printk(KERN_INFO "kmem, init!\n");
+    addr = (char *)printk;
+    length = 0x20;
+    proc_create("kmem",0666,NULL,&myops);
+    return 0;
+}
+ 
+static void kmem_exit(void)
+{
+    remove_proc_entry("kmem", NULL);
+    printk(KERN_INFO "kmem, exit!\n");
+}
+ 
+module_init(kmem_init);
+module_exit(kmem_exit);
+```
 
 
 
