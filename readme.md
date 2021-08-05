@@ -11,7 +11,7 @@
 - [HWS夏令营 之 GDB调一切](https://xuanxuanblingbling.github.io/ctf/pwn/2020/08/24/gdb/)
 - [HWS 2021 入营赛 Pwn/固件/内核](https://xuanxuanblingbling.github.io/ctf/pwn/2021/02/01/hws/)
 
-基础的内核Pwn题大多是出在外挂的内核模块上，而不是内核本体上，对于内核本体的漏洞研究也接触过一次，但没有调试过：
+基础的内核Pwn题多是出在外挂的内核模块上，而不是内核本体，对于内核本体的漏洞只接触过一次，且没有调试过：
 
 - [条件竞争学习 之 DirtyCow分析](https://xuanxuanblingbling.github.io/ctf/pwn/2019/11/18/race/)
 
@@ -110,7 +110,7 @@ $ dmesg | tail -n 2
 - [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
 - [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
 
-所以`wdt.ko`运行起来的内核线程`[hidog]`就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复现了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API：[Linux Kernel module to reboot the system using emergency_restart API](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)。
+所以`wdt.ko`运行起来的内核线程`[hidog]`就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复刻了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API：[Linux Kernel module to reboot the system using emergency_restart API](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)。
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c)
 
@@ -238,9 +238,10 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 #include <linux/fs.h>
  
 MODULE_LICENSE("GPL");
-static char buf[100];
- 
+
+static char buf[100]; 
 mm_segment_t old_fs;
+
 static int readfile_init(void)
 {
     struct file *fp;
@@ -342,15 +343,14 @@ module_exit(kmem_exit);
 ```
 
 
-
 ```
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ sudo insmod ./kmem.ko 
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ cat /proc/kmem 
+$ sudo insmod ./kmem.ko 
+$ cat /proc/kmem 
 addr: 0xffffffffad396663 length: 0x20
 0F 1F 44 00 00 55 48 89   E5 48 83 EC 50 48 89 74   
 24 28 48 89 E6 48 89 54   24 30 48 89 4C 24 38 4C 
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ echo "0xffffffffad396663 0x100" > /proc/kmem
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ cat /proc/kmem 
+$ echo "0xffffffffad396663 0x100" > /proc/kmem
+$ cat /proc/kmem 
 addr: 0xffffffffad396663 length: 0x100
 0F 1F 44 00 00 55 48 89   E5 48 83 EC 50 48 89 74   
 24 28 48 89 E6 48 89 54   24 30 48 89 4C 24 38 4C   
@@ -368,14 +368,14 @@ E8 0A 00 00 E8 47 FF FF   FF 41 C7 44 24 18 00 00
 C7 20 93 15 AE 48 89 E5   E8 E0 DA 9E FF 5D C3 0F   
 1F 44 00 00 55 48 C7 C0   EA 91 BF AD 48 C7 C6 01   
 7E BE AD 48 89 FA 48 89   E5 41 54 F6 47 48 08 49 
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ sudo cat /proc/kallsyms | grep startup_64
+$ sudo cat /proc/kallsyms | grep startup_64
 ffffffffac800000 T startup_64
 ffffffffac800040 T secondary_startup_64
 ffffffffac800045 T secondary_startup_64_no_verify
 ffffffffac8002f0 T __startup_64
 ffffffffac8006d0 T startup_64_setup_env
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ echo "0xffffffffac800000 0x100" > /proc/kmem
-xuanxuan@ubuntu:/mnt/hgfs/桌面/kernel/kmem$ cat /proc/kmem 
+$ echo "0xffffffffac800000 0x100" > /proc/kmem
+$ cat /proc/kmem 
 addr: 0xffffffffac800000 length: 0x100
 48 8D 25 51 3F 60 01 48   8D 3D F2 FF FF FF 56 E8   
 BC 06 00 00 5E 6A 10 48   8D 05 03 00 00 00 50 48   
