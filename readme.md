@@ -300,7 +300,7 @@ error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS
 $ sudo cat /proc/kallsyms | grep " kernel_read"
 ffffffff93111860 T kernel_read
 $ grep -Rn " kernel_read(" /lib/modules/5.11.0-25-generic/build
-./build/include/linux/fs.h:2860:extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
+./include/linux/fs.h:2860:extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
 ```
 
 还真能用，我们可以进一步找一下这个函数的实现，果然被导出：
