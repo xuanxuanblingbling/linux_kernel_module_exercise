@@ -56,7 +56,7 @@
 
 但在接下来的实践里我们会发现一些人困惑的现象：
 
-- 用户态API可以查询MAN手册，但内核API没有找到相应的手册
+- 用户态API可以查询man手册，但内核API没有找到相应的手册
 - 一些API官方文档无法查到，但是可用，比如`kernel_read`
 - 一些API在不断的变化，并且没找到一个详细的版本说明
 
@@ -193,6 +193,16 @@ module_init(hidog_init);
 module_exit(hidog_exit);
 ```
 
+相关API的学习文章：
+
+- [Linux内核的延时函数](https://blog.csdn.net/tiger15605353603/article/details/81323972)
+- [Linux内核API kthread_create_on_node](https://deepinout.com/linux-kernel-api/linux-kernel-api-process-scheduling/linux-kernel-api-kthread_create_on_node.html)
+- [kthread_create_on_node和kthread_stop](https://zhuanlan.zhihu.com/p/56642985)
+- [linux模块编程（二）——运行不息的内核线程kthread](https://blog.csdn.net/qb_2008/article/details/6835783)
+- [kthread_should_stop（）这个函数干了什么？](https://blog.csdn.net/happyguys12345/article/details/53407082)
+- [How to fix error: passing argument 4 of 'proc_create' from incompatible pointer type](https://stackoverflow.com/questions/64931555/how-to-fix-error-passing-argument-4-of-proc-create-from-incompatible-pointer)
+- [https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)
+
 编译，安装，即可看到有了`[hidog]`内核线程：
 
 ```c
@@ -249,7 +259,7 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 
 ### 文件读写
 
-网上找到许多例子：
+网上能找到许多例子：
 
 - [内核态文件操作](https://blog.csdn.net/yf210yf/article/details/8997007)
 - [在linux内核中 读写上层文件](https://blog.csdn.net/wh_19910525/article/details/41207277)
@@ -257,19 +267,62 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 - [linux内核编程-内核态文件操作](https://blog.csdn.net/ggmjxry/article/details/79780766)
 - [Read/write files within a Linux kernel module](https://stackoverflow.com/questions/1184274/read-write-files-within-a-linux-kernel-module)
 
+但按照如上方法在本机上（linux 5.11.0-25）编译会有如下报错：
+
+```c
+error: implicit declaration of function 'get_fs'; did you mean 'get_sa'? [-Werror=implicit-function-declaration]
+error: implicit declaration of function 'set_fs'; did you mean 'sget_fc'? [-Werror=implicit-function-declaration]
+error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS_NS'?
+```
+
+发现是新版本内核把`set_fs()`废弃了，但怎么解决读文件的问题却没有找到，看起来`set_fs()`和读文件也没有什么强相关：
+
 - [Doesn't build with linux kernel 5.10+](https://www.gitmemory.com/issue/linuxdeepin/deepin-anything/31/755469167)
 - [Saying goodbye to set_fs()](https://lwn.net/Articles/832121/)
 - [How to replace set_fs(KERNEL_DS) for a kernel 5.10.x module driver version](https://stackoverflow.com/questions/65667688/how-to-replace-set-fskernel-ds-for-a-kernel-5-10-x-module-driver-version)
-
 - [Linux Kernel 5.10-RC1发布：弃用可追溯到初版的set_fs ()功能](https://www.cnbeta.com/articles/tech/1045759.htm)
 - [Linux 5.10 finally ditches decades-old tool that caused security bugs](https://www.zdnet.com/article/linux-5-10-finally-ditches-decades-old-tool-that-caused-security-bugs/)
+
+那到底怎么读文件呢？当搜索这个问题时，很多答案会反问你，你为什么要在内核态读文件呢？原来在内核开发者眼里，由于性能以及安全风险，读文件这种功能应该交给用户态程序，而不应该在内核中完成：
 
 - [Driving Me Nuts - Things You Never Should Do in the Kernel](https://www.linuxjournal.com/article/8110)
 - [File I/O in a Linux kernel module](https://stackoverflow.com/questions/275386/file-i-o-in-a-linux-kernel-module)
 - [An in-kernel file loading interface](https://lwn.net/Articles/676101/)
 
-> [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
+这也是内核开发和应用开发的区别，目标不同，所以思路也不同。读文件，这个在用户态的应用程序看起来在正常不过的操作，在内核态居然是万人嫌。不过话说回来，内核态程序和用户态程序虽然目标不同，但其本质的最大差别就是运行时的CPU特权级不同，而且本身读写文件系统这个功能就是内核完成的，按道理内核一定可以直接读写文件，不信你看：
 
+- [load_elf_binary阅读(1)](https://blog.csdn.net/ch122633/article/details/54348535)
+- [File I/O in a Linux kernel module](https://stackoverflow.com/questions/275386/file-i-o-in-a-linux-kernel-module)
+
+他们都提到了`kernel_read`这个函数，用处是在加载ELF和底层固件时读文件，而且第一篇文章也很困惑为什么找不到这个函数的资料。那我们可以通过搜索头文件和看函数符号的方法来看看这函数到底能不能用：
+
+```
+$ sudo cat /proc/kallsyms | grep " kernel_read"
+ffffffff93111860 T kernel_read
+$ grep -Rn " kernel_read(" /lib/modules/5.11.0-25-generic/build
+/lib/modules/5.11.0-25-generic/build/include/linux/fs.h:2860:extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
+```
+
+果然还真能用，我们可以进一步找一下这个函数的实现，果然被导出：
+
+> [https://github.com/torvalds/linux/blob/master/fs/read_write.c](https://github.com/torvalds/linux/blob/master/fs/read_write.c)
+
+```c
+ssize_t kernel_read(struct file *file, void *buf, size_t count, loff_t *pos)
+{
+	ssize_t ret;
+
+	ret = rw_verify_area(READ, file, pos, count);
+	if (ret)
+		return ret;
+	return __kernel_read(file, buf, count, pos);
+}
+EXPORT_SYMBOL(kernel_read);
+```
+
+那就使用`kernel_read`来读取一个只有root用户可以读取的flag文件吧：
+
+> [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
 
 ```c
 #include <linux/init.h>
@@ -303,6 +356,28 @@ module_init(readfile_init);
 module_exit(readfile_exit);
 ```
 
+编译，安装，成功读取到flag：
+
+```c
+$ ls -al /flag
+---------- 1 root root 23 Aug  5 09:20 /flag
+$ cat /flag
+cat: /flag: Permission denied
+$ sudo cat /flag
+flag{this_is_the_flag}
+$ make
+make[1]: Entering directory '/usr/src/linux-headers-5.11.0-25-generic'
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.o
+  MODPOST /home/xuanxuan/linux_kernel_module_exercise/03.readfile/Module.symvers
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.mod.o
+  LD [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.ko
+make[1]: Leaving directory '/usr/src/linux-headers-5.11.0-25-generic'
+$ sudo insmod ./readfile.ko 
+$ dmesg | tail -n 1
+[  408.529461] read: flag{this_is_the_flag}
+```
+
+所以内核Pwn题未必非得返回用户态拿到一个root的shell，或者在用户态orw，内核态应该也可以直接读flag
 
 ## 内存调试
 
@@ -433,6 +508,9 @@ C0 8B 05 99 27 90 01 8B   15 97 27 90 01 0F 30 48
 9F 61 01 3F 0F 30 B8 33   00 05 80 0F 22 C0 6A 00   
 9D 48 89 F7 68 07 01 80   AC 31 ED 48 8B 05 36 27 
 ```
+
+- [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
+- [dmesg 命令使用总结](https://markrepo.github.io/commands/2018/07/13/dmesg/)
 
 
 - [printk-formats.txt](https://www.kernel.org/doc/Documentation/printk-formats.txt)
