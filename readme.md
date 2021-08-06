@@ -441,11 +441,11 @@ $ sudo cat /proc/flag
 flag{this_is_the_flag}
 ```
 
-所以如果是内核Pwn仍然需要：`commit_creds(prepare_kernel_cred(0));`来提权：
+所以如果是内核Pwn仍然需要 `commit_creds(prepare_kernel_cred(0))` 来提权：
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
 
-不过这就未必需要用户态了，直接printk应该也可以
+不过这就未必需要用户态了，直接printk应该也可以。
 
 ## 内存调试
 
