@@ -275,7 +275,7 @@ error: implicit declaration of function 'set_fs'; did you mean 'sget_fc'?
 error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS_NS'?
 ```
 
-发现是新版本内核把`set_fs()`废弃了，但怎么解决读文件的问题却没有找到，看起来`set_fs()`和读文件也没有什么强相关：
+发现是新版本把`set_fs()`废弃了，但怎么解决读文件的问题却没找到，看起来`set_fs()`和读文件也没什么强相关：
 
 - [Doesn't build with linux kernel 5.10+](https://www.gitmemory.com/issue/linuxdeepin/deepin-anything/31/755469167)
 - [Saying goodbye to set_fs()](https://lwn.net/Articles/832121/)
@@ -289,7 +289,7 @@ error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS
 - [File I/O in a Linux kernel module](https://stackoverflow.com/questions/275386/file-i-o-in-a-linux-kernel-module)
 - [An in-kernel file loading interface](https://lwn.net/Articles/676101/)
 
-这也是内核开发和应用开发的区别，目标不同，所以思路也不同。读文件，这个在用户态的应用程序看起来在正常不过的操作，在内核态居然是万人嫌。不过话说回来，内核态程序和用户态程序虽然目标不同，但其本质的最大差别就是运行时的CPU特权级不同，而且本身读写文件系统这个功能就是内核完成的，按道理内核一定可以直接读写文件，不信你看：
+这也是内核开发和应用开发的区别，目标不同，思路也就不同。读文件，这个在用户态的应用程序看起来再正常不过的操作，在内核态居然是万人嫌。不过话说回来，内核态程序和用户态程序虽然目标不同，但其本质的最大差别就是运行时CPU特权级不同，而且本身读写文件系统这个功能就是内核完成的，按道理内核一定可以直接读写文件，不信你看：
 
 - [load_elf_binary阅读(1)](https://blog.csdn.net/ch122633/article/details/54348535)
 - [File I/O in a Linux kernel module](https://stackoverflow.com/questions/275386/file-i-o-in-a-linux-kernel-module)
@@ -320,18 +320,71 @@ ssize_t kernel_read(struct file *file, void *buf, size_t count, loff_t *pos)
 EXPORT_SYMBOL(kernel_read);
 ```
 
-那就使用`kernel_read`来读取一个只有root用户可以读取的flag文件吧，为了避免在insmod处执行一定是root权限，所以使用了一个proc文件系统的接口来让普通用户触发内核读取文件：
+那就使用`kernel_read`来读取一个只有root用户可以读取的flag文件吧：
 
-> [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+ 
+MODULE_LICENSE("GPL");
+
+static char buf[100]; 
+mm_segment_t old_fs;
+
+static int readfile_init(void)
+{
+    struct file *fp;
+    loff_t pos = 0;
+
+    printk("readfile enter\n");
+    fp  = filp_open("/flag", O_RDWR ,0);
+    kernel_read(fp, buf, sizeof(buf), &pos);
+    printk("read: %s\n", buf);
+    filp_close(fp, NULL);
+    return 0;
+}
+ 
+static void readfile_exit(void)
+{
+    printk(KERN_INFO "readfile, exit!\n");
+}
+ 
+module_init(readfile_init);
+module_exit(readfile_exit);
+```
+
+编译，安装，成功读取到flag：
+
+```c
+$ ls -al /flag
+---------- 1 root root 23 Aug  5 09:20 /flag
+$ cat /flag
+cat: /flag: Permission denied
+$ sudo cat /flag
+flag{this_is_the_flag}
+$ make
+make[1]: Entering directory '/usr/src/linux-headers-5.11.0-25-generic'
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.o
+  MODPOST /home/xuanxuan/linux_kernel_module_exercise/03.readfile/Module.symvers
+  CC [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.mod.o
+  LD [M]  /home/xuanxuan/linux_kernel_module_exercise/03.readfile/readfile.ko
+make[1]: Leaving directory '/usr/src/linux-headers-5.11.0-25-generic'
+$ sudo insmod ./readfile.ko 
+$ dmesg | tail -n 1
+[  408.529461] read: flag{this_is_the_flag}
+```
+
+但在insmod处执行一定是root权限，所以使用了一个proc文件系统的接口来让普通用户触发内核读取文件：
 
 ```c
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
-#include <linux/cred.h>
 
 MODULE_LICENSE("GPL");
+
 static char buf[100];
 
 static ssize_t flag_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
@@ -339,7 +392,6 @@ static ssize_t flag_read(struct file *file, char __user *ubuf, size_t count, lof
     struct file *fp;
     loff_t pos = 0;
 
-    commit_creds(prepare_kernel_cred(0));
     if(*ppos > 0) return 0;
     fp  = filp_open("/flag", O_RDWR ,0);
     int len = kernel_read(fp, buf, sizeof(buf), &pos);
@@ -372,7 +424,7 @@ module_init(readfile_init);
 module_exit(readfile_exit);
 ```
 
-编译，安装，成功读取到flag：
+编译，安装，普通用户无法成功读取到flag：
 
 ```c
 $ ls -al /flag
@@ -384,10 +436,16 @@ flag{this_is_the_flag}
 $ make
 $ sudo insmod ./readfile.ko 
 $ cat /proc/flag 
+killed
+$ sudo cat /proc/flag 
 flag{this_is_the_flag}
 ```
 
-不过如果不加`commit_creds(prepare_kernel_cred(0));`，仍然无法读取flag。所以内核Pwn时未必非要返回用户态，提权后直接printk应该也可以。
+所以如果是内核Pwn仍然需要：`commit_creds(prepare_kernel_cred(0));`来提权：
+
+> [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
+
+不过这就未必需要用户态了，直接printk应该也可以
 
 ## 内存调试
 
