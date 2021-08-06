@@ -445,7 +445,7 @@ flag{this_is_the_flag}
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
 
-不过这就未必需要用户态了，直接printk应该也可以。
+不过既然能读文件，直接printk应该也可以，未必非要一个root的用户态shell。
 
 ## 内存调试
 
