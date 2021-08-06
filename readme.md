@@ -465,6 +465,8 @@ flag{this_is_the_flag}
 
 因为仅仅只是简单的读写内存，而不是复杂的单步调试，所以就是通过一个proc的接口文件，打印目标内存即可：
 
+> [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/04.kmem/kmem.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/04.kmem/kmem.c)
+
 ```c
 #include <linux/init.h>
 #include <linux/module.h>
@@ -600,6 +602,8 @@ C0 8B 05 99 27 90 01 8B   15 97 27 90 01 0F 30 48
 
 ## 内核本体
 
+> 现在让我们从正向开发的视角切回逆向视角：认识编译好的内核二进制
+
 有了读取内核内存的能力后，是不是迫不及待想看看本机内核二进制的真面目了呢？其实不必dump内存，内核二进制本身就可以通过文件系统访问到，它就在`/boot`目标下：
 
 ```
@@ -614,9 +618,21 @@ $ sudo file /boot/vmlinuz-5.11.0-25-generic
 
 使用的两个工具：
 
+> 内核符号表的原理：[内核符号表的生成和查找过程](https://blog.csdn.net/jasonchen_gbd/article/details/44025681)
+
 - [extract-vmlinux](https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux): 将vmlinuz解压成vmlinux
 - [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf): 恢复vmlinux为IDA可以解析其符号表的ELF
 
-内核符号表的原理：
+```
+$ ./vmlinux.sh  ./vmlinuz-5.8.0-63-generic  > vmlinux
+$ vmlinux-to-elf ./vmlinux ./vmlinux.elf
+```
 
-- [内核符号表的生成和查找过程](https://blog.csdn.net/jasonchen_gbd/article/details/44025681)
+然后使用IDA分析最后的生成的`vmlinux.elf`:
+
+
+
+
+
+
+
