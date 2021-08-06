@@ -58,7 +58,7 @@
 - 一些API官方文档无法查到，但是可用，比如`kernel_read`
 - 一些API在不断的变化，并且没找到一个详细的版本说明
 
-后来看到了：[The Linux Kernel Driver Interface](https://www.kernel.org/doc/html/latest/process/stable-api-nonsense.html)以及[Linux kernel interfaces](https://en.wikipedia.org/wiki/Linux_kernel_interfaces)的 `In-kernel APIs` ，也就明白了，主要是责任和限制：
+后来看到了：[The Linux Kernel Driver Interface](https://www.kernel.org/doc/html/latest/process/stable-api-nonsense.html)以及[Linux kernel interfaces](https://en.wikipedia.org/wiki/Linux_kernel_interfaces)也就明白了，主要是责任和限制：
 
 - 内核开发者的数量要远小于应用开发者，所以linux内核并不需要像一门编程语言，对API的稳定所**负责**
 - linux内核希望他们的开发是个轻骑兵，灵活且自由，技术在变革，接口也应该不断优化，不应该被稳定所**限制**
