@@ -5,6 +5,7 @@
 #include <linux/cred.h>
 
 MODULE_LICENSE("GPL");
+
 static char buf[100];
 
 static ssize_t flag_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)

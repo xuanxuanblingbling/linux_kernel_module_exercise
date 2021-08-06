@@ -528,7 +528,7 @@ module_init(kmem_init);
 module_exit(kmem_exit);
 ```
 
-相关API以及需要注意的问题：
+这里只实现了读内存，写内存的功能可以自行实现，代码中相关API以及需要注意的问题：
 
 - [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
 - [printk-formats.txt](https://www.kernel.org/doc/Documentation/printk-formats.txt)
@@ -600,13 +600,23 @@ C0 8B 05 99 27 90 01 8B   15 97 27 90 01 0F 30 48
 
 ## 内核本体
 
-- [Linux升级内核的正确姿势](https://blog.csdn.net/wf19930209/article/details/81879777)
+有了读取内核内存的能力后，是不是迫不及待想看看本机内核二进制的真面目了呢？其实不必dump内存，内核二进制本身就可以通过文件系统访问到，它就在`/boot`目标下：
 
+```
+$ uname -r
+$ sudo file /boot/vmlinuz-5.11.0-25-generic 
+/boot/vmlinuz-5.11.0-25-generic: Linux kernel x86 boot executable bzImage
+```
 
-vmlinuz-> vmlinux -> elf 
+我们可以按照如下方法分析它：
 
 - [Linux中提取内核vmlinux并转化为带有symbol name的可分析elf](https://blog.csdn.net/qq_40421991/article/details/111241980)
-- [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf)
-- [extract-vmlinux](https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux)
+
+使用的两个工具：
+
+- [extract-vmlinux](https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux): 将vmlinuz解压成vmlinux
+- [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf): 恢复vmlinux为IDA可以解析其符号表的ELF
+
+内核符号表的原理：
 
 - [内核符号表的生成和查找过程](https://blog.csdn.net/jasonchen_gbd/article/details/44025681)
