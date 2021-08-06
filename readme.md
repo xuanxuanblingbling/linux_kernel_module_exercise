@@ -65,7 +65,14 @@
 - 内核开发者的数量要远小于应用开发者，所以linux内核并不需要像一门编程语言，对API的稳定所**负责**
 - linux内核希望他们的开发是个轻骑兵，灵活且自由，技术在变革，接口也应该不断优化，不应该被稳定所**限制**
 
-所以linux内核并不对提供稳定的API而负责，故在我们开发内核态代码时，很多API需要自己去找，去搜，去看源码才能明白原理以及用法，另外其实只要是使用了`EXPORT_SYMBOL`导出的函数，都可以成功使用。不过这并不意味着我们不需要知道一个API过去的故事，因为从学习与反思的角度来看，向后看就是向前进。
+所以linux内核并不对提供稳定的API而负责，故在我们开发内核态代码时，很多API需要自己去找，去搜，去看源码才能明白原理以及用法，另外其实只要是使用了`EXPORT_SYMBOL`导出的函数，都可以成功使用。不过这并不意味着我们不需要知道一个API过去的故事，因为从学习与反思的角度来看，向后看就是向前进。另外，不稳定的API除了给我们学习带来一些困惑，还会不会带来其他问题呢？
+
+- ["Unstable kernel APIs" vs. the embedded reality :-(](https://lwn.net/Articles/744225/)
+- [为什么 Linux 在桌面会失败？](https://www.zhihu.com/question/20706966/answer/1032961970)
+- [Linux 是否被过誉了？](https://www.zhihu.com/question/40050873/answer/1209926554)
+- [再谈Linux内核模块注入(没有kernel header也能hack kernel)](https://blog.csdn.net/dog250/article/details/105984089)
+
+想了解更多linux内核可以常逛 Linux Weekly News：[https://lwn.net/](https://lwn.net/)
 
 ### helloworld
 
