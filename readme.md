@@ -42,16 +42,29 @@
 - [linux模块编程（四）—— 消息的使者list](https://blog.csdn.net/qb_2008/article/details/6839899)
 - [linux内核的学习方法](https://blog.csdn.net/qb_2008/article/details/6832361)
 
-
-正向开发必然要回答一个问题：我可以使用哪些函数？
+正向开发必然要回答一个问题：我可以使用哪些函数？这其实就是内核API，首先想到的就是printk，那么除了printk还可以使用哪些函数呢？可以在内核的官方文档里搜索：
 
 - [https://www.kernel.org/](https://www.kernel.org/)
 - [https://www.kernel.org/doc/html/latest/](https://www.kernel.org/doc/html/latest/)
 
+另外也有基于linux 3.19.3版本的书：
 
+- [Linux内核API完全参考手册(第2版)](https://item.jd.com/12047310.html)
+- 下载链接: [https://pan.baidu.com/s/1SzONyaborj3MgrD1H4ExRw](https://pan.baidu.com/s/1SzONyaborj3MgrD1H4ExRw)，密码: utta
 
+但在接下来的实践里我们会发现一些人困惑的现象：
 
-以下代码只求最简以完成功能，目的是为了说明例子、看的清楚，所以什么线程安全，锁啥的，统统不予考虑。
+- 用户态API可以查询MAN手册，但内核API没有找到相应的手册
+- 一些API官方文档无法查到，但是可用，比如`kernel_read`
+- 一些API在不断的变化，并且没找到一个详细的版本说明
+
+后来看到了：[The Linux Kernel Driver Interface](https://www.kernel.org/doc/html/latest/process/stable-api-nonsense.html)以及[Linux kernel interfaces](https://en.wikipedia.org/wiki/Linux_kernel_interfaces)的 `In-kernel APIs` 一节，也就明白了：
+
+- 内核相关开发人员的数量要远远小于开发应用的程序员，所以linux内核API并不需要负责像一门编程语言的API一样的稳定
+- linux内核希望他们的开发是个轻骑兵，灵活且自由，随着技术的变革，接口也应该不断优化，不应该被提供稳定的API限制住
+- linux版本更新迭代的很快，负责详细的API版本说明是向后看，而不是向前进，但从学习与反思的角度来看，向后看就是向前进
+
+所以linux内核并不对提供稳定的API而负责，故在我们开发内核态代码时，很多API需要自己去找，去搜，去看源码才能明白原理以及用法，另外其实只要是使用了`EXPORT_SYMBOL`导出的函数，都可以成功使用。接下来我们就进入代码实例，以下代码力求最简以完成功能，目的是为了看的清楚，所以什么线程安全，锁啥的，统统不予考虑（我也不会）。
 
 ### helloworld
 
@@ -109,6 +122,7 @@ $ dmesg | tail -n 2
 
 - [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
 - [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
+- [【海思篇】【Hi3516DV300】十五、看门狗（watchdog）](https://blog.csdn.net/cocoron/article/details/105936441)
 
 所以`wdt.ko`运行起来的内核线程`[hidog]`就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？我自己复刻了一个：主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API：[Linux Kernel module to reboot the system using emergency_restart API](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)。
 
@@ -224,10 +238,22 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 
 网上找到许多例子：
 
-- [Linux 内核态文件操作](https://blog.csdn.net/cenziboy/article/details/7867489)
+- [内核态文件操作](https://blog.csdn.net/yf210yf/article/details/8997007)
+- [在linux内核中 读写上层文件](https://blog.csdn.net/wh_19910525/article/details/41207277)
 - [Linux内核下读写文件](https://www.cnblogs.com/chorm590/p/12565991.html)
 - [linux内核编程-内核态文件操作](https://blog.csdn.net/ggmjxry/article/details/79780766)
+- [Read/write files within a Linux kernel module](https://stackoverflow.com/questions/1184274/read-write-files-within-a-linux-kernel-module)
 
+- [Doesn't build with linux kernel 5.10+](https://www.gitmemory.com/issue/linuxdeepin/deepin-anything/31/755469167)
+- [Saying goodbye to set_fs()](https://lwn.net/Articles/832121/)
+- [How to replace set_fs(KERNEL_DS) for a kernel 5.10.x module driver version](https://stackoverflow.com/questions/65667688/how-to-replace-set-fskernel-ds-for-a-kernel-5-10-x-module-driver-version)
+
+- [Linux Kernel 5.10-RC1发布：弃用可追溯到初版的set_fs ()功能](https://www.cnbeta.com/articles/tech/1045759.htm)
+- [Linux 5.10 finally ditches decades-old tool that caused security bugs](https://www.zdnet.com/article/linux-5-10-finally-ditches-decades-old-tool-that-caused-security-bugs/)
+
+- [Driving Me Nuts - Things You Never Should Do in the Kernel](https://www.linuxjournal.com/article/8110)
+- [File I/O in a Linux kernel module](https://stackoverflow.com/questions/275386/file-i-o-in-a-linux-kernel-module)
+- [An in-kernel file loading interface](https://lwn.net/Articles/676101/)
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
 
