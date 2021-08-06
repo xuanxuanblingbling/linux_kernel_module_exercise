@@ -61,7 +61,7 @@
 后来看到了：[The Linux Kernel Driver Interface](https://www.kernel.org/doc/html/latest/process/stable-api-nonsense.html)以及[Linux kernel interfaces](https://en.wikipedia.org/wiki/Linux_kernel_interfaces)的 `In-kernel APIs` 一节，也就明白了：
 
 - 内核开发者的数量要远小于开发应用的程序员，所以linux内核API并不需要负责像一门编程语言的API一样的稳定
-- linux内核希望他们的开发是个轻骑兵，灵活且自由，技术在变革，接口也应该不断优化，不应该被**稳定**限制住
+- linux内核希望他们的开发是个轻骑兵，灵活且自由，技术在变革，接口也应该不断优化，不应该被 **稳定** 限制住
 
 所以linux内核并不对提供稳定的API而负责，故在我们开发内核态代码时，很多API需要自己去找，去搜，去看源码才能明白原理以及用法，另外其实只要是使用了`EXPORT_SYMBOL`导出的函数，都可以成功使用。不过这并不意味着我们不需要知道一个API过去的故事，因为从学习与反思的角度来看，向后看就是向前进。
 
