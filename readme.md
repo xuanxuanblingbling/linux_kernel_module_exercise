@@ -270,8 +270,8 @@ Every 1.0s: dmesg | tail -n 5      ubuntu: Thu Aug  5 15:34:48 2021
 但按照如上方法在本机上（linux 5.11.0-25）编译会有如下报错：
 
 ```c
-error: implicit declaration of function 'get_fs'; did you mean 'get_sa'? [-Werror=implicit-function-declaration]
-error: implicit declaration of function 'set_fs'; did you mean 'sget_fc'? [-Werror=implicit-function-declaration]
+error: implicit declaration of function 'get_fs'; did you mean 'get_sa'? 
+error: implicit declaration of function 'set_fs'; did you mean 'sget_fc'?
 error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS_NS'?
 ```
 
@@ -296,14 +296,14 @@ error: 'KERNEL_DS' undeclared (first use in this function); did you mean 'KERNFS
 
 他们都提到了`kernel_read`这个函数，用处是在加载ELF和底层固件时读文件，而且第一篇文章也很困惑为什么找不到这个函数的资料。那我们可以通过搜索头文件和看函数符号的方法来看看这函数到底能不能用：
 
-```
+```c
 $ sudo cat /proc/kallsyms | grep " kernel_read"
 ffffffff93111860 T kernel_read
 $ grep -Rn " kernel_read(" /lib/modules/5.11.0-25-generic/build
-/lib/modules/5.11.0-25-generic/build/include/linux/fs.h:2860:extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
+./build/include/linux/fs.h:2860:extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
 ```
 
-果然还真能用，我们可以进一步找一下这个函数的实现，果然被导出：
+还真能用，我们可以进一步找一下这个函数的实现，果然被导出：
 
 > [https://github.com/torvalds/linux/blob/master/fs/read_write.c](https://github.com/torvalds/linux/blob/master/fs/read_write.c)
 
