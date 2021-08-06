@@ -638,7 +638,7 @@ $ file ./vmlinux.elf
 然后使用IDA分析最后的生成的`vmlinux.elf`:
 
 
-![image](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/pic/vmlinux.png?raw=true)
+![image](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/pic/vmlinux.jpeg?raw=true)
 
 
 可以看到入口是`startup_64`，对比之前打印的内存结果，豁然开朗：
