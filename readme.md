@@ -445,21 +445,25 @@ flag{this_is_the_flag}
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/03.readfile/readfile.c)
 
-不过既然能读文件，直接printk应该也可以，未必非要一个root的用户态shell。
+不过既然能读文件，在CTF中直接printk应该也可以，未必非要一个root的用户态shell。
 
 ## 内存调试
 
-- [linux 内核调试方法](https://www.cnblogs.com/shineshqw/articles/2359114.html)
+> CPU在光速的运行，如果没有调试，可能除了上帝，这个世界上没有任何人知道你的代码是怎么运行的
+
+我们自然会对一个不曾见过的东西感到陌生，困惑，甚至恐惧。在平时调试用户态程序时，使用gdb并无法看到内核的内存地址空间，这也使得内核显得有些神秘。每当我们想对内存一探究竟时，必然绕不过**调试**二字。用户态的调试看起来是理所应当，但其实背后是操作系统内核的支持，所以如果想调试内核本身，则需要内核再往下的部分支持：[linux 内核调试方法](https://www.cnblogs.com/shineshqw/articles/2359114.html)，这也就是双机调试或者使用qemu调试的道理。如果软件层次没有任何调试方案，还有硬件层次的[JTAG](https://mp.weixin.qq.com/s/WhgD2e88bw-xMMlQ_0Nq4g)以调试你的代码，但我们真的不能简单轻松的看见内核的内存么？这个问题也可以换一种问法：在没有调试器之前，人们都是怎样写代码的呢？当然是log大法：[FC/NES 游戏是怎么制作的？](https://www.zhihu.com/question/33259518/answer/778042932)。
 
 ### kmem
+
+在linux一切皆文件的哲学下，其实是有接口可以直接读写内核内存的，但因为安全风险一般不开启这个功能：
 
 - [devmem读写物理内存和devkmem读取内核虚拟内存](https://www.cnblogs.com/arnoldlu/p/10721614.html)
 - [How to use /dev/kmem?](https://stackoverflow.com/questions/10800884/how-to-use-dev-kmem)
 - [https://wiki.ubuntu.com/Security/Features#dev-kmem](https://wiki.ubuntu.com/Security/Features#dev-kmem)
 
-
 ### 自己构建
 
+因为仅仅只是简单的读写内存，而不是复杂的单步调试，所以就是通过一个proc的接口文件，打印目标内存即可：
 
 ```c
 #include <linux/init.h>
@@ -524,8 +528,18 @@ module_init(kmem_init);
 module_exit(kmem_exit);
 ```
 
+相关API以及需要注意的问题：
 
-```
+- [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
+- [printk-formats.txt](https://www.kernel.org/doc/Documentation/printk-formats.txt)
+- [linux printk](https://lishiwen4.github.io/linux-kernel/printk)
+- [dmesg 命令使用总结](https://markrepo.github.io/commands/2018/07/13/dmesg/)
+- [获得内核函数地址的四种方法](https://blog.csdn.net/gatieme/article/details/78310036)
+
+用法：向`/proc/kmem`写入目标地址和长度，然后在cat这个文件即可，默认会打印printk的内存：
+
+```c
+$ make
 $ sudo insmod ./kmem.ko 
 $ cat /proc/kmem 
 addr: 0xffffffffad396663 length: 0x20
@@ -550,6 +564,11 @@ E8 0A 00 00 E8 47 FF FF   FF 41 C7 44 24 18 00 00
 C7 20 93 15 AE 48 89 E5   E8 E0 DA 9E FF 5D C3 0F   
 1F 44 00 00 55 48 C7 C0   EA 91 BF AD 48 C7 C6 01   
 7E BE AD 48 89 FA 48 89   E5 41 54 F6 47 48 08 49 
+```
+
+我们通过`startup_64`符号，打印一下内核起始地址的内存：
+
+```c
 $ sudo cat /proc/kallsyms | grep startup_64
 ffffffffac800000 T startup_64
 ffffffffac800040 T secondary_startup_64
@@ -577,16 +596,7 @@ C0 8B 05 99 27 90 01 8B   15 97 27 90 01 0F 30 48
 9D 48 89 F7 68 07 01 80   AC 31 ED 48 8B 05 36 27 
 ```
 
-- [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
-- [dmesg 命令使用总结](https://markrepo.github.io/commands/2018/07/13/dmesg/)
-
-
-- [printk-formats.txt](https://www.kernel.org/doc/Documentation/printk-formats.txt)
-- [linux printk](https://lishiwen4.github.io/linux-kernel/printk)
-
-
-- [获得内核函数地址的四种方法](https://blog.csdn.net/gatieme/article/details/78310036)
-
+到此，我们不需要什么qemu，kdb，kgdb，也可以直接看到我们本机内核的内存。
 
 ## 内核本体
 
