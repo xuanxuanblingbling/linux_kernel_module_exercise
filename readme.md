@@ -138,7 +138,7 @@ $ dmesg | tail -n 2
 
 > [https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/02.hidog/hidog.c)
 
-主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API：[Linux Kernel module to reboot the system using emergency_restart API](https://lynxbee.com/linux-kernel-module-to-reboot-the-system-using-emergency_restart-api/)。
+主要是有一个全局变量clock，在一个一直循环的线程里自增，当其大于30时，系统重启。主要是使用了内核线程这一套api：`kthread_create_on_node, wake_up_process, kthread_should_stop, kthread_stop`，看门狗线程由init模块初始化时拉起，模块卸载时终止。另外使用了`proc_create, remove_proc_entry`proc文件系统的api生成了一个接口文件，当open这个文件时，clock清空。重启的API为`emergency_restart`。
 
 
 ```c
