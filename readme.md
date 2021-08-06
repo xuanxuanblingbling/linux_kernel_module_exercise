@@ -620,7 +620,7 @@ $ sudo file /boot/vmlinuz-5.11.0-25-generic
 - [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf): 恢复vmlinux为IDA可以解析其符号表的ELF，运行时间较长
 
 ```c
-$ ./vmlinux.sh  ./vmlinuz-5.11.0-25-generic  > vmlinux
+$ ./extract-vmlinux.sh  ./vmlinuz-5.11.0-25-generic  > vmlinux
 $ vmlinux-to-elf ./vmlinux ./vmlinux.elf
 ```
 
@@ -654,4 +654,4 @@ BC 06 00 00 5E 6A 10 48   8D 05 03 00 00 00 50 48
 CB E8 EA 00 00 00 48 8D   3D D3 FF FF FF 56 E8 BD   
 ```
 
-因为存在内核基址的随机化，所以IDA结果和实际基址不同，至此我们可以放心的看IDA中的逆向结果来认识内核二进制了。
+因为存在内核基址的随机化，所以IDA结果和实际不同，至此我们可以放心的看IDA中的逆向结果来认识内核二进制了。
