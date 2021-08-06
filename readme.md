@@ -1,7 +1,7 @@
 # linux 内核 初探：运行你代码在内核态
 
 
-> 正向开发是理解一个复杂系统的必要过程，我们熟悉linux用户态的Pwn题，是因为随手就能写出一个helloworld，然后编译、运行、逆向、调试一条龙，进而理解它完整的生命周期。linux内核Pwn的文章有很多，不过大都是以完成一道题目的视角行文的。而本文希望，我们能熟悉内核态的代码的运行状态，具体来说就是：在 ubuntu20.04 (linux 5.11.0-25) 的本机环境下完成 ① 正向开发：将我们的代码送进内核态运行，了解有哪些可以使用的内核函数，基于这些函数我们实现一些功能。② 内存调试：使用log大法对内核态进行调试并分析内存布局。③ 内核本体：找到内核二进制代码本体，认识一下。
+> 正向开发是理解一个复杂系统的必要过程，我们熟悉linux用户态的Pwn题，是因为随手就能写出一个helloworld，然后编译、运行、逆向、调试一条龙，进而理解它完整的生命周期。linux内核Pwn的文章有很多，不过大都是以完成一道题目的视角行文的。而本文希望，我们能熟悉内核态的代码的运行状态，具体来说就是：在 ubuntu20.04 (linux 5.11.0-25) 的本机环境下完成 ① 正向开发：将我们的代码送进内核态运行，了解有哪些可以使用的内核函数，基于这些函数我们实现一些功能。② 内存调试：使用log大法对内核态进行调试并分析内存布局。③ 内核本体：不同于源码视角，我们要找到内核二进制代码本体，认识一下。
 
 ## 攻击概述
 
@@ -573,10 +573,6 @@ C7 20 93 15 AE 48 89 E5   E8 E0 DA 9E FF 5D C3 0F
 ```c
 $ sudo cat /proc/kallsyms | grep startup_64
 ffffffffac800000 T startup_64
-ffffffffac800040 T secondary_startup_64
-ffffffffac800045 T secondary_startup_64_no_verify
-ffffffffac8002f0 T __startup_64
-ffffffffac8006d0 T startup_64_setup_env
 $ echo "0xffffffffac800000 0x100" > /proc/kmem
 $ cat /proc/kmem 
 addr: 0xffffffffac800000 length: 0x100
@@ -602,7 +598,7 @@ C0 8B 05 99 27 90 01 8B   15 97 27 90 01 0F 30 48
 
 ## 内核本体
 
-> 现在让我们从正向开发的视角切回逆向视角：认识编译好的内核二进制
+> 现在让我们从正向开发的视角转到逆向视角：认识编译好的内核二进制
 
 有了读取内核内存的能力后，是不是迫不及待想看看本机内核二进制的真面目了呢？其实不必dump内存，内核二进制本身就可以通过文件系统访问到，它就在`/boot`目标下：
 
@@ -642,8 +638,20 @@ $ file ./vmlinux.elf
 然后使用IDA分析最后的生成的`vmlinux.elf`:
 
 
+![image](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/pic/vmlinux.png?raw=true)
 
 
+可以看到入口是`startup_64`，对比之前打印的内存结果，豁然开朗：
 
+```
+$ sudo cat /proc/kallsyms | grep startup_64
+ffffffffac800000 T startup_64
+$ echo "0xffffffffac800000 0x100" > /proc/kmem
+$ cat /proc/kmem 
+addr: 0xffffffffac800000 length: 0x100
+48 8D 25 51 3F 60 01 48   8D 3D F2 FF FF FF 56 E8   
+BC 06 00 00 5E 6A 10 48   8D 05 03 00 00 00 50 48   
+CB E8 EA 00 00 00 48 8D   3D D3 FF FF FF 56 E8 BD   
+```
 
-
+因为存在内核基址的随机化，所以IDA结果和实际基址不同，至此我们可以放心的看IDA中的逆向结果来认识内核二进制了。
