@@ -67,9 +67,9 @@
 
 所以linux内核并不对提供稳定的API而负责，故在我们开发内核态代码时，很多API需要自己去找，去搜，去看源码才能明白原理以及用法，另外其实只要是使用了`EXPORT_SYMBOL`导出的函数，都可以成功使用。不过这并不意味着我们不需要知道一个API过去的故事，因为从学习与反思的角度来看，向后看就是向前进。另外，不稳定的API除了给我们学习带来一些困惑，还会不会带来其他问题呢？
 
-- ["Unstable kernel APIs" vs. the embedded reality :-(](https://lwn.net/Articles/744225/)
-- [为什么 Linux 在桌面会失败？](https://www.zhihu.com/question/20706966/answer/1032961970)
 - [Linux 是否被过誉了？](https://www.zhihu.com/question/40050873/answer/1209926554)
+- [为什么 Linux 在桌面会失败？](https://www.zhihu.com/question/20706966/answer/1032961970)
+- ["Unstable kernel APIs" vs. the embedded reality :-(](https://lwn.net/Articles/744225/)
 - [再谈Linux内核模块注入(没有kernel header也能hack kernel)](https://blog.csdn.net/dog250/article/details/105984089)
 
 想了解更多linux内核可以常逛 Linux Weekly News：[https://lwn.net/](https://lwn.net/)
@@ -130,9 +130,9 @@ $ dmesg | tail -n 2
 
 ![image](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/pic/hidog.png?raw=true)
 
-- [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
 - [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
-- [【海思篇】【Hi3516DV300】十五、看门狗（watchdog）](https://blog.csdn.net/cocoron/article/details/105936441)
+- [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
+- [海思篇 Hi3516DV300 十五、看门狗（watchdog）](https://blog.csdn.net/cocoron/article/details/105936441)
 
 所以`wdt.ko`运行起来的内核线程`[hidog]`就是`看门狗本狗`，目标进程的不断`ioctl的线程`就是`喂狗`。可以发现，这里的内核代码与刚才只运行一次的helloworld不同，`[hidog]`一直在运行，那么内核模块里如何启动一个内核线程呢？这里我自己复刻了一个：
 
@@ -457,8 +457,8 @@ flag{this_is_the_flag}
 
 在linux一切皆文件的哲学下，其实是有接口可以直接读写内核内存的，但因为安全风险一般不开启这个功能：
 
-- [devmem读写物理内存和devkmem读取内核虚拟内存](https://www.cnblogs.com/arnoldlu/p/10721614.html)
 - [How to use /dev/kmem?](https://stackoverflow.com/questions/10800884/how-to-use-dev-kmem)
+- [devmem读写物理内存和devkmem读取内核虚拟内存](https://www.cnblogs.com/arnoldlu/p/10721614.html)
 - [https://wiki.ubuntu.com/Security/Features#dev-kmem](https://wiki.ubuntu.com/Security/Features#dev-kmem)
 
 ### 自己构建
@@ -532,11 +532,11 @@ module_exit(kmem_exit);
 
 这里只实现了读内存，写内存的功能可以自行实现，代码中相关API以及需要注意的问题：
 
-- [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
 - [printk-formats.txt](https://www.kernel.org/doc/Documentation/printk-formats.txt)
 - [linux printk](https://lishiwen4.github.io/linux-kernel/printk)
 - [dmesg 命令使用总结](https://markrepo.github.io/commands/2018/07/13/dmesg/)
 - [获得内核函数地址的四种方法](https://blog.csdn.net/gatieme/article/details/78310036)
+- [Linux kernel module strange behaviour](https://stackoverflow.com/questions/12354122/linux-kernel-module-strange-behaviour)
 
 用法：向`/proc/kmem`写入目标地址和长度，然后在cat这个文件即可，默认会打印printk的内存：
 
@@ -621,11 +621,22 @@ $ sudo file /boot/vmlinuz-5.11.0-25-generic
 > 内核符号表的原理：[内核符号表的生成和查找过程](https://blog.csdn.net/jasonchen_gbd/article/details/44025681)
 
 - [extract-vmlinux](https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux): 将vmlinuz解压成vmlinux
-- [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf): 恢复vmlinux为IDA可以解析其符号表的ELF
+- [vmlinux-to-elf](https://github.com/marin-m/vmlinux-to-elf): 恢复vmlinux为IDA可以解析其符号表的ELF，运行时间较长
 
-```
-$ ./vmlinux.sh  ./vmlinuz-5.8.0-63-generic  > vmlinux
+```c
+$ ./vmlinux.sh  ./vmlinuz-5.11.0-25-generic  > vmlinux
 $ vmlinux-to-elf ./vmlinux ./vmlinux.elf
+```
+
+三个文件的file结果：
+
+```c
+$ file vmlinuz-5.11.0-25-generic 
+vmlinuz-5.11.0-25-generic: Linux kernel x86 boot executable bzImage, version 5.11.0-25-generic (buildd@lgw01-amd64-038) #27~20.04.1-Ubuntu SMP Tue Jul 13 17:41:23 UTC 2021, RO-rootFS, swap_dev 0x9, Normal VGA
+$ file ./vmlinux
+./vmlinux: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=c0263a3075bc0a9388365ddf35ab5422da3356a9, stripped
+$ file ./vmlinux.elf 
+./vmlinux.elf: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=c0263a3075bc0a9388365ddf35ab5422da3356a9, not stripped
 ```
 
 然后使用IDA分析最后的生成的`vmlinux.elf`:
