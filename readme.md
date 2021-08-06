@@ -128,6 +128,8 @@ $ dmesg | tail -n 2
 
 之前在调试一个基于海思hi3518解决方案的摄像头时，只要gdb把目标进程挂上，系统不一会就重启了，开始以为是有其他进程检测反调试，不过我把其他看起来有关的进程全部干掉后，仍然没用。后来发现了一个`[hidog]`内核线程，看起来就是看门狗功能，经过对目标程序的逆向，发现的确有个线程在不断的ioctl一个dev目录下的watchdog设备文件。最开始想的验证以上推测正确与否的思路是字节写一个不断ioctl的代码交叉编译上去，不过因为内核版本和交叉编译工具不太合适，一度陷入放弃。但最后猛然找到了对应的内核模块文件`wdt.ko`，由于此系统的文件系统可以修改，并且发现此模块是开机后才安装的，所以直接把`wdk.ko`删掉了，重启后挂gdb则不会重启，可以正常调试了。
 
+![image](https://github.com/xuanxuanblingbling/linux_kernel_module_exercise/blob/master/pic/hidog.png?raw=true)
+
 - [海思看门狗 HI3516 看门狗使用](https://www.cnblogs.com/jiangjiu/p/14605443.html)
 - [看门狗与喂狗详解](https://blog.csdn.net/m0_38045338/article/details/118249149)
 - [【海思篇】【Hi3516DV300】十五、看门狗（watchdog）](https://blog.csdn.net/cocoron/article/details/105936441)
