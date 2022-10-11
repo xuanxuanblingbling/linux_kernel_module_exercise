@@ -1,13 +1,14 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
+#include <linux/io.h>
 
 MODULE_LICENSE("GPL");
 
 char * addr;
 int length;
 
-static ssize_t kmem_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
+static ssize_t pmem_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos) 
 {
     char buf[0x1000];
     copy_from_user(buf, ubuf, count);
@@ -16,45 +17,48 @@ static ssize_t kmem_write(struct file *file, const char __user *ubuf, size_t cou
     return count;
 }
 
-static ssize_t kmem_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
+static ssize_t pmem_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos) 
 {
-    printk(KERN_INFO "kmem, read!\n");
+    printk(KERN_INFO "pmem, read!\n");
     if(*ppos > 0) return 0;
     char buf[0x1000];
     
     int len = sprintf(buf,"addr: 0x%llx length: 0x%x\n",addr,length);
+    char * vaddr = ioremap(addr,length);
+
     int i=0;
     for(i;i<length;i++){
         if((i%8==0)  && (i!=0)) len += sprintf(buf+len,"  ");
         if((i%16==0) && (i!=0)) len += sprintf(buf+len,"\n");
-        len += sprintf(buf+len,"%02X ",addr[i] & 0xff);
+        len += sprintf(buf+len,"%02X ",vaddr[i] & 0xff);
     }
     len += sprintf(buf+len,"\n");
-    
+
+    iounmap(vaddr);
     copy_to_user(ubuf,buf,len);
     *ppos = len;
     return len;
 }
 
 const struct proc_ops myops = {
-    .proc_write = kmem_write,
-    .proc_read  = kmem_read
+    .proc_write = pmem_write,
+    .proc_read  = pmem_read
 };
 
-static int kmem_init(void)
+static int pmem_init(void)
 {
-    printk(KERN_INFO "kmem, init!\n");
-    addr = (char *)_printk;
+    printk(KERN_INFO "pmem, init!\n");
+    addr = 0;
     length = 0x20;
-    proc_create("kmem",0666,NULL,&myops);
+    proc_create("pmem",0666,NULL,&myops);
     return 0;
 }
  
-static void kmem_exit(void)
+static void pmem_exit(void)
 {
-    remove_proc_entry("kmem", NULL);
-    printk(KERN_INFO "kmem, exit!\n");
+    remove_proc_entry("pmem", NULL);
+    printk(KERN_INFO "pmem, exit!\n");
 }
  
-module_init(kmem_init);
-module_exit(kmem_exit);
+module_init(pmem_init);
+module_exit(pmem_exit);
